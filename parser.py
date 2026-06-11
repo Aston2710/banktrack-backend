@@ -2,20 +2,25 @@ import re
 from datetime import datetime
 from typing import Optional
 
-TIPO_RECIBIDO      = "recibido"
-TIPO_ENVIADO       = "enviado"
-TIPO_TRANSFERENCIA = "transferencia"
-TIPO_DESCONOCIDO   = "desconocido"
+TIPO_RECIBIDO       = "recibido"
+TIPO_ENVIADO        = "enviado"
+TIPO_TRANSFERENCIA  = "transferencia"
+TIPO_PAGO_INMEDIATO = "pago_inmediato"
+TIPO_TARJETA        = "tarjeta"
+TIPO_DESCONOCIDO    = "desconocido"
 
 
 def identificar_tipo(asunto: str, cuerpo: str) -> str:
     asunto_lower = asunto.lower()
     cuerpo_lower = cuerpo.lower()
 
-    # PRIMERO — rechazos, antes que cualquier otra cosa
     if "fue rechazado" in cuerpo_lower:
         return "rechazado"
-
+    if "notificación de uso de su tarjeta" in asunto_lower or \
+       "notificacion de uso de su tarjeta" in asunto_lower:
+        return TIPO_TARJETA
+    if "pago inmediato en banco venezolano" in asunto_lower:
+        return TIPO_PAGO_INMEDIATO
     if "transferencia a tercero" in asunto_lower:
         return TIPO_TRANSFERENCIA
     if "pago móvil bvc" in asunto_lower or "pago movil bvc" in asunto_lower:
@@ -25,11 +30,11 @@ def identificar_tipo(asunto: str, cuerpo: str) -> str:
             return TIPO_ENVIADO
     return TIPO_DESCONOCIDO
 
+
 def _limpiar_monto(texto: str) -> Optional[float]:
     if not texto:
         return None
     limpio = texto.strip()
-    # Separador de miles es punto, decimal es coma → "38.894,59"
     partes = limpio.split(',')
     if len(partes) == 2:
         entero  = partes[0].replace('.', '').replace(' ', '')
@@ -59,10 +64,6 @@ def _parsear_fecha(fecha_str: str, hora_str: str) -> Optional[datetime]:
 
 
 def _buscar(patron: str, texto: str) -> Optional[str]:
-    """
-    Búsqueda con re.IGNORECASE + re.DOTALL.
-    Maneja saltos de línea y espacios múltiples dentro del patrón.
-    """
     m = re.search(patron, texto, re.IGNORECASE | re.DOTALL)
     return m.group(1).strip() if m else None
 
@@ -77,17 +78,14 @@ def parsear_recibido(cuerpo: str) -> dict:
         "referencia":     None,
     }
 
-    # Monto — puede tener espacios entre "Bs." y el número
     raw = _buscar(r'pago por\s+Bs\.\s*([\d\s.,]+?)\s*a través', cuerpo)
     if raw:
         resultado["monto_bs"] = _limpiar_monto(raw)
 
-    # Celular origen
     raw = _buscar(r'número de celular\s+(\*[\d*\-]+)', cuerpo)
     if raw:
         resultado["celular_origen"] = raw
 
-    # Fecha y hora
     m = re.search(
         r'el día\s+(\d{2}/\d{2}/\d{4})\s+a las\s+([\d:]+)',
         cuerpo, re.IGNORECASE
@@ -95,7 +93,6 @@ def parsear_recibido(cuerpo: str) -> dict:
     if m:
         resultado["fecha"] = _parsear_fecha(m.group(1), m.group(2))
 
-    # Referencia
     raw = _buscar(r'código de referencia\s+(\d+)', cuerpo)
     if raw:
         resultado["referencia"] = raw
@@ -105,12 +102,12 @@ def parsear_recibido(cuerpo: str) -> dict:
 
 def parsear_enviado(cuerpo: str) -> dict:
     resultado = {
-        "tipo":             "salida",
-        "subtipo":          TIPO_ENVIADO,
-        "monto_bs":         None,
-        "celular_destino":  None,
-        "fecha":            None,
-        "referencia":       None,
+        "tipo":            "salida",
+        "subtipo":         TIPO_ENVIADO,
+        "monto_bs":        None,
+        "celular_destino": None,
+        "fecha":           None,
+        "referencia":      None,
     }
 
     raw = _buscar(r'pago por\s+Bs\.\s*([\d\s.,]+?)\s*a través', cuerpo)
@@ -149,7 +146,6 @@ def parsear_transferencia(cuerpo: str) -> dict:
         "referencia":            None,
     }
 
-    # Monto a Debitar — termina cuando encuentra el siguiente campo
     raw = _buscar(r'Monto a Debitar[:\s]+([\d.,]+)', cuerpo)
     if raw:
         resultado["monto_bs"] = _limpiar_monto(raw)
@@ -158,36 +154,118 @@ def parsear_transferencia(cuerpo: str) -> dict:
     if raw:
         resultado["comision_declarada_bs"] = _limpiar_monto(raw)
 
-    raw = _buscar(r'Teléfono Destino[:\s]+(\d+)', cuerpo)
+    raw = _buscar(r'Tel[eé?]+fono Destino[:\s]+(\d+)', cuerpo)
     if raw:
         resultado["telefono_destino"] = raw
 
-    # Banco destino — termina en el siguiente campo "Monto a Acreditar"
     raw = _buscar(r'Banco Destino[:\s]+(.+?)(?:\s+Monto a Acreditar|\n|$)', cuerpo)
     if raw:
         resultado["banco_destino"] = raw
 
-    # Beneficiario — termina en "Banco Destino"
     raw = _buscar(r'Nombre del Beneficiario[:\s]+(.+?)(?:\s+Banco Destino|\n|$)', cuerpo)
     if raw:
         resultado["beneficiario"] = raw
 
-    # Concepto — útil para saber qué fue el pago
     raw = _buscar(r'Concepto del Pago[:\s]+(.+?)(?:\s+Referencia|\n|$)', cuerpo)
     if raw:
         resultado["concepto"] = raw
 
-    # Fecha y hora: "02/06/2026 08:05 AM"
     m = re.search(
-        r'Fecha y Hora[:\s]+(\d{2}/\d{2}/\d{4})\s+([\d:]+ [AP]M)',
+        r'Fecha y Hora[:\s]+(\d{2}/\d{2}/\d{4})\s+([\d:]+\s*(?:[AP]M)?)',
+        cuerpo, re.IGNORECASE
+    )
+    if m:
+        resultado["fecha"] = _parsear_fecha(m.group(1), m.group(2).strip())
+
+    raw = _buscar(r'Referencia[:\s]+(\d+)', cuerpo)
+    if raw:
+        resultado["referencia"] = raw
+
+    return resultado
+
+
+def parsear_pago_inmediato(cuerpo: str) -> dict:
+    resultado = {
+        "tipo":             "enriquecimiento",
+        "subtipo":          TIPO_PAGO_INMEDIATO,
+        "monto_bs":         None,
+        "referencia":       None,
+        "concepto":         None,
+        "telefono_destino": None,
+        "banco_destino":    None,
+        "fecha":            None,
+    }
+
+    raw = _buscar(r'Monto a Debitar[:\s]+([\d.,]+)', cuerpo)
+    if raw:
+        resultado["monto_bs"] = _limpiar_monto(raw)
+
+    raw = _buscar(r'Referencia[:\s]+(\d+)', cuerpo)
+    if raw:
+        resultado["referencia"] = raw
+
+    raw = _buscar(r'Concepto del Pago[:\s]+(.+?)(?:\s+Referencia|\n|$)', cuerpo)
+    if raw:
+        resultado["concepto"] = raw
+
+    raw = _buscar(r'Tel[eé?]+fono Destino[:\s]+(\d+)', cuerpo)
+    if raw:
+        resultado["telefono_destino"] = raw
+
+    raw = _buscar(r'Banco Destino[:\s]+(.+?)(?:\s+Monto a Acreditar|\n|$)', cuerpo)
+    if raw:
+        resultado["banco_destino"] = raw
+
+    m = re.search(
+        r'Fecha y Hora[:\s]+(\d{2}/\d{2}/\d{4})\s+([\d:]+\s*(?:[AP]M)?)',
+        cuerpo, re.IGNORECASE
+    )
+    if m:
+        resultado["fecha"] = _parsear_fecha(m.group(1), m.group(2).strip())
+
+    return resultado
+
+
+def parsear_tarjeta(cuerpo: str) -> dict:
+    resultado = {
+        "tipo":            "salida",
+        "subtipo":         TIPO_TARJETA,
+        "monto_bs":        None,
+        "tarjeta_ultimos": None,
+        "comercio":        None,
+        "fecha":           None,
+        "referencia":      None,  # código de aprobación como referencia
+        "etiquetas":       [],
+    }
+
+    # Monto — "Bs       6.880,00"
+    raw = _buscar(r'monto de Bs\s+([\d\s.,]+?)\s+realizada', cuerpo)
+    if raw:
+        resultado["monto_bs"] = _limpiar_monto(raw)
+
+    # Tarjeta — últimos dígitos "****-****-**12-1724"
+    raw = _buscar(r'tarjeta No\.\s+([\*\-\d]+)', cuerpo)
+    if raw:
+        resultado["tarjeta_ultimos"] = raw
+
+    # Fecha y hora "el día 09/06/2026 a las 17:22:17"
+    m = re.search(
+        r'el día\s+(\d{2}/\d{2}/\d{4})\s+a las\s+([\d:]+)',
         cuerpo, re.IGNORECASE
     )
     if m:
         resultado["fecha"] = _parsear_fecha(m.group(1), m.group(2))
 
-    raw = _buscar(r'Referencia[:\s]+(\d+)', cuerpo)
+    # Comercio — entre "en el comercio" y el código VE o aprobación
+    raw = _buscar(r'en el comercio\s+(.+?)\s+(?:VE\b|la cual)', cuerpo)
+    if raw:
+        resultado["comercio"] = raw.strip()
+
+    # Código de aprobación → guardado como referencia y como etiqueta
+    raw = _buscar(r'aprobada con código\s+(\d+)', cuerpo)
     if raw:
         resultado["referencia"] = raw
+        resultado["etiquetas"]  = [f"aprobacion:{raw}"]
 
     return resultado
 
@@ -197,9 +275,13 @@ def parsear_correo(asunto: str, cuerpo: str) -> dict:
 
     if tipo == "rechazado":
         datos = parsear_enviado(cuerpo)
-        datos["tipo"] = "rechazado"
+        datos["tipo"]    = "rechazado"
         datos["subtipo"] = "rechazado"
         return datos
+    elif tipo == TIPO_TARJETA:
+        return parsear_tarjeta(cuerpo)
+    elif tipo == TIPO_PAGO_INMEDIATO:
+        return parsear_pago_inmediato(cuerpo)
     elif tipo == TIPO_RECIBIDO:
         return parsear_recibido(cuerpo)
     elif tipo == TIPO_ENVIADO:

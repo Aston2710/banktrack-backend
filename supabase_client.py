@@ -1,11 +1,28 @@
 from supabase import create_client, Client
 from config import SUPABASE_URL, SUPABASE_KEY
 from datetime import datetime
+from typing import Optional
 
 _cliente: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
+
+def insertar_transaccion(datos: dict) -> bool:
+    try:
+        _cliente.table("transacciones").insert(datos).execute()
+        print(f"[supabase] ✅ Insertada: {datos.get('subtipo')} | "
+              f"ref: {datos.get('referencia')} | "
+              f"Bs. {datos.get('monto_bs')}")
+        return True
+    except Exception as e:
+        mensaje = str(e)
+        if "duplicate" in mensaje.lower() or "unique" in mensaje.lower():
+            print(f"[supabase] ⚠️  Ya existe email_id: {datos.get('email_id')} — ignorado")
+            return False
+        print(f"[supabase] ❌ Error insertando: {e}")
+        return False
+
+
 def existe_referencia(referencia: str) -> bool:
-    """Verifica si ya existe una transacción con esa referencia."""
     if not referencia:
         return False
     try:
@@ -18,28 +35,71 @@ def existe_referencia(referencia: str) -> bool:
         print(f"[supabase] Error verificando referencia: {e}")
         return False
 
-def insertar_transaccion(datos: dict) -> bool:
-    """
-    Inserta una transacción. Si el email_id ya existe la ignora.
-    Retorna True si se insertó, False si ya existía o hubo error.
-    """
+
+def obtener_por_referencia(referencia: str) -> Optional[dict]:
+    """Retorna la transacción existente con esa referencia."""
     try:
-        _cliente.table("transacciones").insert(datos).execute()
-        print(f"[supabase] Transacción insertada: {datos.get('referencia')}")
+        res = (_cliente.table("transacciones")
+               .select("*")
+               .eq("referencia", referencia)
+               .limit(1)
+               .execute())
+        return res.data[0] if res.data else None
+    except Exception as e:
+        print(f"[supabase] Error obteniendo por referencia: {e}")
+        return None
+
+
+def enriquecer_transaccion(referencia: str, datos_nuevos: dict) -> bool:
+    """
+    Compara campos vacíos en la transacción existente con los datos nuevos.
+    Solo actualiza campos que estaban vacíos y ahora tienen valor.
+    Loguea exactamente qué campos se actualizaron.
+    """
+    existente = obtener_por_referencia(referencia)
+    if not existente:
+        return False
+
+    campos_a_actualizar = {}
+
+    # Campos candidatos a enriquecimiento
+    candidatos = [
+        "concepto",
+        "fecha",
+        "telefono_destino",
+        "banco_destino",
+        "comercio",
+        "tarjeta_ultimos",
+        "etiquetas",
+    ]
+
+    for campo in candidatos:
+        valor_nuevo    = datos_nuevos.get(campo)
+        valor_existente = existente.get(campo)
+
+        # Solo actualizar si el nuevo tiene valor y el existente está vacío
+        if valor_nuevo and not valor_existente:
+            campos_a_actualizar[campo] = valor_nuevo
+
+    if not campos_a_actualizar:
+        print(f"[supabase] ⏭️  Duplicado sin datos nuevos: ref {referencia} — ignorado")
+        return False
+
+    try:
+        _cliente.table("transacciones") \
+            .update(campos_a_actualizar) \
+            .eq("referencia", referencia) \
+            .execute()
+
+        campos_str = ", ".join(campos_a_actualizar.keys())
+        print(f"[supabase] 🔄 Enriquecida ref {referencia}: {campos_str}")
         return True
     except Exception as e:
-        mensaje = str(e)
-        if "duplicate" in mensaje.lower() or "unique" in mensaje.lower():
-            print(f"[supabase] Ya existe: {datos.get('email_id')} — ignorado")
-            return False
-        print(f"[supabase] Error insertando: {e}")
+        print(f"[supabase] Error enriqueciendo: {e}")
         return False
 
 
 def obtener_transacciones_mes(mes: str) -> list:
-    """
-    mes formato: '2026-05'
-    """
     try:
         res = (_cliente.table("transacciones")
                .select("*")
@@ -62,9 +122,6 @@ def obtener_configuracion() -> dict:
 
 
 def guardar_cierre_mensual(mes: str) -> bool:
-    """
-    Genera y guarda el snapshot del mes indicado.
-    """
     try:
         transacciones = obtener_transacciones_mes(mes)
         if not transacciones:
@@ -81,15 +138,15 @@ def guardar_cierre_mensual(mes: str) -> bool:
         pct_comision = round((comisiones / salidas_bs * 100), 4) if salidas_bs > 0 else 0
 
         cierre = {
-            "mes":                  mes,
-            "total_entradas_bs":    round(entradas_bs, 2),
-            "total_salidas_bs":     round(salidas_bs, 2),
-            "total_entradas_usd":   round(entradas_usd, 4),
-            "total_salidas_usd":    round(salidas_usd, 4),
-            "total_comisiones_bs":  round(comisiones, 2),
+            "mes":                   mes,
+            "total_entradas_bs":     round(entradas_bs, 2),
+            "total_salidas_bs":      round(salidas_bs, 2),
+            "total_entradas_usd":    round(entradas_usd, 4),
+            "total_salidas_usd":     round(salidas_usd, 4),
+            "total_comisiones_bs":   round(comisiones, 2),
             "porcentaje_comisiones": pct_comision,
-            "tasa_promedio_mes":    tasa_prom,
-            "cerrado_en":           datetime.utcnow().isoformat(),
+            "tasa_promedio_mes":     tasa_prom,
+            "cerrado_en":            datetime.utcnow().isoformat(),
         }
 
         _cliente.table("cierres_mensuales").upsert(cierre).execute()

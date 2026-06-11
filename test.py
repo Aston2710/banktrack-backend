@@ -50,7 +50,61 @@ def test_parser():
                 "Descubra las ventajas de Venezolano Online y realice sus transacciones con máxima seguridad y rapidez."
             ),
         },
+        {
+            "nombre": "RECHAZADO",
+            "asunto": "Notificación de operación efectuada a través de nuestro servicio Pago Móvil BVC.",
+            "cuerpo": (
+                "Estimado cliente, le notificamos que hemos registrado un pago por Bs.        1,00 "
+                "a través de nuestro servicio Pago Móvil BVC, realizada para el número de celular "
+                "****-*****92, el día 01/06/2026 a las 23:50:05, el cual fue rechazado.\n"
+                "Para mayor información comuníquese al 0501-mibanco (0501-642.2626), "
+                "0212-203.5300 o *BVC (282) para Movilnet / Movistar.\n"
+                "Gracias por usar nuestros servicios.\n"
+                "VENEZOLANO DE CREDITO, S.A. Banco Universal"
+            ),
+        },
+        {
+            "nombre": "PAGO INMEDIATO",
+            "asunto": "Pago Inmediato en Banco Venezolano de Cr?dito a trav?s del Sistema Venezolano Online",
+            "cuerpo": (
+                "Estimado cliente, le notificamos que hemos registrado una transaccion de: "
+                "Pago Inmediato en el Sistema Venezolano Online\n"
+                "Fecha y Hora: 05/06/2026 21:41\n"
+                "Usuario: JE****RM\n"
+                "Cuenta Origen: 000157024388\n"
+                "Monto a Debitar: 5,00\n"
+                "Tel?fono Destino: 04144415089\n"
+                "Nombre del Beneficiario: Pago Movil\n"
+                "Banco Destino: BANCO DEL CARIBE, C.A. BANCO UNIV\n"
+                "Monto a Acreditar: 5,00\n"
+                "Concepto del Pago: Si\n"
+                "Referencia: 00455175"
+            ),
+        },
+        {
+            "nombre": "TARJETA",
+            "asunto": "Notificación de uso de su tarjeta del Venezolano de Crédito",
+            "cuerpo": (
+                "Estimado cliente, le notificamos que hemos registrado una transacción de consumo "
+                "por un monto de Bs       6.880,00 realizada con su tarjeta No. ****-****-**12-1724, "
+                "el día 09/06/2026 a las 17:22:17 en el comercio PERFUMERIA ALI BABA, C,A CARABOBO     "
+                "VE la cual fue aprobada con código 221696.\n"
+                "Para mayor información comuníquese al 0501-mibanco (0501-642.2626), "
+                "0212-203.5300 o *BVC (282) para Movilnet / Movistar.\n"
+                "Gracias por usar nuestros servicios.\n"
+                "VENEZOLANO DE CREDITO, S.A. Banco Universal"
+            ),
+        },
     ]
+
+    campos_requeridos = {
+        "RECIBIDO":       ["monto_bs", "fecha", "referencia"],
+        "ENVIADO":        ["monto_bs", "fecha", "referencia"],
+        "TRANSFERENCIA":  ["monto_bs", "fecha", "referencia", "concepto"],
+        "RECHAZADO":      ["monto_bs", "fecha"],
+        "PAGO INMEDIATO": ["monto_bs", "fecha", "referencia", "concepto"],
+        "TARJETA":        ["monto_bs", "fecha", "comercio", "tarjeta_ultimos"],
+    }
 
     errores = 0
     for caso in casos:
@@ -58,17 +112,17 @@ def test_parser():
         print(f"\n  ── {caso['nombre']} ──")
         for k, v in resultado.items():
             print(f"    {k:28} → {v}")
-        if resultado.get("monto_bs") is None:
-            print(f"  ❌ ERROR: monto_bs no extraído")
-            errores += 1
-        elif resultado.get("fecha") is None:
-            print(f"  ❌ ERROR: fecha no extraída")
-            errores += 1
-        else:
+
+        requeridos   = campos_requeridos.get(caso["nombre"], [])
+        errores_caso = sum(1 for c in requeridos if not resultado.get(c))
+        for campo in requeridos:
+            if not resultado.get(campo):
+                print(f"    ❌ FALTA: {campo}")
+        if errores_caso == 0:
             print(f"  ✅ OK")
+        errores += errores_caso
 
     return errores == 0
-
 
 # ══════════════════════════════════════════════════════════
 # TEST 2 — Comisiones
@@ -199,6 +253,107 @@ def test_supabase():
 
 
 # ══════════════════════════════════════════════════════════
+# TEST 4b — Enriquecimiento
+# ══════════════════════════════════════════════════════════
+
+def test_enriquecimiento():
+    print("\n" + "═"*55)
+    print("  TEST 4b — Enriquecimiento de transacciones")
+    print("═"*55)
+
+    from supabase_client import (
+        insertar_transaccion,
+        existe_referencia,
+        enriquecer_transaccion,
+        obtener_por_referencia,
+    )
+    from datetime import datetime
+
+    errores = 0
+    REF_TEST = "TEST-ENRICH-001"
+
+    # Limpiar por si quedó de una prueba anterior
+    try:
+        from supabase_client import _cliente
+        _cliente.table("transacciones").delete().eq("referencia", REF_TEST).execute()
+    except:
+        pass
+
+    # 1 — Insertar transacción base sin concepto ni telefono
+    print("\n  1. Insertar transacción base (sin concepto)...")
+    base = {
+        "email_id":   f"test-enrich-base",
+        "fecha":      datetime.now().isoformat(),
+        "tipo":       "salida",
+        "subtipo":    "enviado",
+        "monto_bs":   100.0,
+        "referencia": REF_TEST,
+        "comision_bs": 2.0,
+        "mes_corte":  datetime.now().strftime("%Y-%m"),
+    }
+    ok = insertar_transaccion(base)
+    if ok:
+        print("  ✅ Base insertada")
+    else:
+        print("  ❌ Error insertando base")
+        errores += 1
+        return errores == 0
+
+    # 2 — Verificar que existe
+    print("\n  2. Verificar que existe por referencia...")
+    if existe_referencia(REF_TEST):
+        print("  ✅ Referencia encontrada")
+    else:
+        print("  ❌ No se encontró la referencia")
+        errores += 1
+
+    # 3 — Enriquecer con concepto y telefono
+    print("\n  3. Enriquecer con concepto y telefono_destino...")
+    datos_nuevos = {
+        "concepto":         "Pago de prueba",
+        "telefono_destino": "04121234567",
+    }
+    enriquecido = enriquecer_transaccion(REF_TEST, datos_nuevos)
+    if enriquecido:
+        print("  ✅ Enriquecimiento OK")
+    else:
+        print("  ❌ No se enriqueció")
+        errores += 1
+
+    # 4 — Verificar que los campos se actualizaron
+    print("\n  4. Verificar campos actualizados...")
+    actualizada = obtener_por_referencia(REF_TEST)
+    if actualizada:
+        concepto = actualizada.get("concepto")
+        telefono = actualizada.get("telefono_destino")
+        if concepto == "Pago de prueba" and telefono == "04121234567":
+            print(f"  ✅ concepto='{concepto}' | telefono='{telefono}'")
+        else:
+            print(f"  ❌ Valores incorrectos: concepto='{concepto}' telefono='{telefono}'")
+            errores += 1
+    else:
+        print("  ❌ No se pudo leer la transacción actualizada")
+        errores += 1
+
+    # 5 — Intentar enriquecer con datos que ya existen (debe ignorar)
+    print("\n  5. Intentar enriquecer con datos ya existentes (debe ignorar)...")
+    enriquecido2 = enriquecer_transaccion(REF_TEST, {"concepto": "Otro concepto"})
+    if not enriquecido2:
+        print("  ✅ Ignorado correctamente — no sobreescribe datos existentes")
+    else:
+        print("  ❌ Sobreescribió datos que ya existían")
+        errores += 1
+
+    # Limpiar registro de prueba
+    try:
+        _cliente.table("transacciones").delete().eq("referencia", REF_TEST).execute()
+        print("\n  🧹 Registro de prueba eliminado")
+    except:
+        pass
+
+    return errores == 0
+
+# ══════════════════════════════════════════════════════════
 # TEST 5 — Gmail (solo verifica autenticación)
 # ══════════════════════════════════════════════════════════
 def test_gmail():
@@ -235,11 +390,12 @@ if __name__ == "__main__":
     print("╚══════════════════════════════════════════════════════╝")
 
     tests = [
-        ("Parser",     test_parser),
-        ("Comisiones", test_comisiones),
-        ("DolarAPI",   test_dolar_api),
-        ("Supabase",   test_supabase),
-        ("Gmail",      test_gmail),
+        ("Parser",          test_parser),
+        ("Comisiones",      test_comisiones),
+        ("DolarAPI",        test_dolar_api),
+        ("Supabase",        test_supabase),
+        ("Enriquecimiento", test_enriquecimiento),
+        ("Gmail",           test_gmail),
     ]
 
     resultados = {}

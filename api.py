@@ -1,6 +1,7 @@
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, Body
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
 from datetime import datetime
 import os
 
@@ -22,7 +23,11 @@ def verificar_token(credentials: HTTPAuthorizationCredentials = Depends(bearer))
         raise HTTPException(status_code=401, detail="No autorizado")
 
 
-# ── Health check — para verificar que la API está viva ────────────────────────
+# ── Raíz y health check ───────────────────────────────────────────────────────
+@app.get("/")
+def root():
+    return RedirectResponse(url="/health")
+
 @app.get("/health")
 def health():
     return {"status": "ok", "timestamp": datetime.now().isoformat()}
@@ -45,7 +50,7 @@ def obtener_transacciones_por_subtipo(mes: str, subtipo: str, _=Depends(verifica
 
 
 @app.patch("/transacciones/{id}")
-def actualizar_transaccion(id: str, body: dict, _=Depends(verificar_token)):
+def actualizar_transaccion(id: str, body: dict = Body(...), _=Depends(verificar_token)):
     """
     Permite editar campos no sensibles: categoria, nota, etiquetas.
     El monto nunca se puede modificar.
@@ -128,7 +133,7 @@ def obtener_configuracion(_=Depends(verificar_token)):
 
 
 @app.patch("/configuracion/{id}")
-def actualizar_configuracion(id: str, body: dict, _=Depends(verificar_token)):
+def actualizar_configuracion(id: str, body: dict = Body(...), _=Depends(verificar_token)):
     from supabase_client import _cliente
     campos_editables = {"limite_mensual_bs", "limite_mensual_usd",
                         "alerta_porcentaje", "moneda_principal"}

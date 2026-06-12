@@ -107,7 +107,7 @@ campos_requeridos = {
     "RECHAZADO":      ["monto_bs", "fecha"],
     "PAGO INMEDIATO": ["monto_bs", "fecha", "referencia", "concepto"],
     "TARJETA":        ["monto_bs", "fecha", "comercio", "tarjeta_ultimos"],
-    "SERVICIO": ["monto_bs", "fecha", "numero_servicio"],
+    "SERVICIO": ["monto_bs", "fecha", "contacto_destino"],
 }
 
 errores_total = 0

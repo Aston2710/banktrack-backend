@@ -116,7 +116,7 @@ def test_parser():
         "RECHAZADO":      ["monto_bs", "fecha"],
         "PAGO INMEDIATO": ["monto_bs", "fecha", "referencia", "concepto"],
         "TARJETA":        ["monto_bs", "fecha", "comercio", "tarjeta_ultimos"],
-        "SERVICIO": ["monto_bs", "fecha", "numero_servicio"],
+        "SERVICIO": ["monto_bs", "fecha", "contacto_destino"],
     }
 
     errores = 0
@@ -168,16 +168,19 @@ def test_comisiones():
     # Test resolver_comision por subtipo
     print()
     casos_subtipo = [
-        {"subtipo": "recibido",      "monto_bs": 1000.0,   "esperado": 0.0},
-        {"subtipo": "enviado",       "monto_bs": 1000.0,   "esperado": 3.0},
+        {"subtipo": "recibido",      "monto_bs": 1000.0,   "esperado_monto": 0.0,    "esperado_fuente": None},
+        {"subtipo": "enviado",       "monto_bs": 1000.0,   "esperado_monto": 3.0,    "esperado_fuente": "calculada"},
         {"subtipo": "transferencia", "monto_bs": 38894.59,
-         "comision_declarada_bs": 116.68,                  "esperado": 116.68},
+         "comision_declarada_bs": 116.68,                  "esperado_monto": 116.68, "esperado_fuente": "declarada"},
+        {"subtipo": "servicio",      "monto_bs": 600.0,    "esperado_monto": 0.0,    "esperado_fuente": "exonerada"},
     ]
     for caso in casos_subtipo:
         resultado = resolver_comision(caso)
-        ok = abs(resultado - caso["esperado"]) < 0.01
+        ok_monto  = abs(resultado["monto"] - caso["esperado_monto"]) < 0.01
+        ok_fuente = resultado["fuente"] == caso["esperado_fuente"]
+        ok = ok_monto and ok_fuente
         estado = "✅" if ok else "❌"
-        print(f"  {estado} subtipo={caso['subtipo']:15} → comisión: {resultado:>8,.2f}  (esperado: {caso['esperado']:,.2f})")
+        print(f"  {estado} subtipo={caso['subtipo']:15} → monto: {resultado['monto']:>8,.2f}  fuente: {str(resultado['fuente']):10}  (esperado: {caso['esperado_monto']:,.2f} / {caso['esperado_fuente']})")
         if not ok:
             errores += 1
 
@@ -234,7 +237,7 @@ def test_supabase():
     print("\n  4b. Insertar transacción de prueba...")
     registro_prueba = {
         "email_id":   "test-email-id-000",
-        "fecha":      datetime.utcnow().isoformat(),
+        "fecha":      datetime.now(datetime.UTC).isoformat(),
         "tipo":       "entrada",
         "subtipo":    "recibido",
         "monto_bs":   1.00,
@@ -320,11 +323,11 @@ def test_enriquecimiento():
         print("  ❌ No se encontró la referencia")
         errores += 1
 
-    # 3 — Enriquecer con concepto y telefono
-    print("\n  3. Enriquecer con concepto y telefono_destino...")
+    # 3 — Enriquecer con concepto y contacto_destino
+    print("\n  3. Enriquecer con concepto y contacto_destino...")
     datos_nuevos = {
         "concepto":         "Pago de prueba",
-        "telefono_destino": "04121234567",
+        "contacto_destino": "04121234567",
     }
     enriquecido = enriquecer_transaccion(REF_TEST, datos_nuevos)
     if enriquecido:
@@ -337,12 +340,12 @@ def test_enriquecimiento():
     print("\n  4. Verificar campos actualizados...")
     actualizada = obtener_por_referencia(REF_TEST)
     if actualizada:
-        concepto = actualizada.get("concepto")
-        telefono = actualizada.get("telefono_destino")
-        if concepto == "Pago de prueba" and telefono == "04121234567":
-            print(f"  ✅ concepto='{concepto}' | telefono='{telefono}'")
+        concepto  = actualizada.get("concepto")
+        contacto  = actualizada.get("contacto_destino")
+        if concepto == "Pago de prueba" and contacto == "04121234567":
+            print(f"  ✅ concepto='{concepto}' | contacto_destino='{contacto}'")
         else:
-            print(f"  ❌ Valores incorrectos: concepto='{concepto}' telefono='{telefono}'")
+            print(f"  ❌ Valores incorrectos: concepto='{concepto}' contacto_destino='{contacto}'")
             errores += 1
     else:
         print("  ❌ No se pudo leer la transacción actualizada")

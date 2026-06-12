@@ -68,29 +68,30 @@ def procesar_correos():
                      if datos.get("fecha")
                      else datetime.now().strftime("%Y-%m"))
 
+        # ── Calcular comisión ─────────────────────────────────────────────
+        comision = resolver_comision(datos)
+
         # ── Armar registro ────────────────────────────────────────────────
         registro = {
-            "email_id":              correo["id"],
-            "fecha":                 datos["fecha"].isoformat() if datos.get("fecha") else datetime.now().isoformat(),
-            "tipo":                  datos["tipo"],
-            "subtipo":               subtipo,
-            "monto_bs":              monto_real,
-            "tasa_dolar":            tasa,
-            "monto_usd":             monto_usd,
-            "referencia":            referencia,
-            "celular_origen":        datos.get("celular_origen"),
-            "celular_destino":       datos.get("celular_destino"),
-            "telefono_destino":      datos.get("telefono_destino"),
-            "numero_servicio":       datos.get("numero_servicio"),
-            "banco_destino":         datos.get("banco_destino"),
-            "beneficiario":          datos.get("beneficiario"),
-            "comercio":              datos.get("comercio"),
-            "tarjeta_ultimos":       datos.get("tarjeta_ultimos"),
-            "comision_bs":           resolver_comision(datos),
-            "comision_declarada_bs": datos.get("comision_declarada_bs"),
-            "mes_corte":             mes_corte,
-            "concepto":              datos.get("concepto"),
-            "etiquetas":             datos.get("etiquetas") or [],
+            "email_id":         correo["id"],
+            "fecha":            datos["fecha"].isoformat() if datos.get("fecha") else datetime.now().isoformat(),
+            "tipo":             datos["tipo"],
+            "subtipo":          subtipo,
+            "monto_bs":         monto_real,
+            "tasa_dolar":       tasa,
+            "monto_usd":        monto_usd,
+            "referencia":       referencia,
+            "celular_origen":   datos.get("celular_origen"),
+            "contacto_destino": datos.get("contacto_destino"),
+            "banco_destino":    datos.get("banco_destino"),
+            "beneficiario":     datos.get("beneficiario"),
+            "comercio":         datos.get("comercio"),
+            "tarjeta_ultimos":  datos.get("tarjeta_ultimos"),
+            "comision_bs":      comision["monto"],
+            "comision_fuente":  comision["fuente"],
+            "mes_corte":        mes_corte,
+            "concepto":         datos.get("concepto"),
+            "etiquetas":        datos.get("etiquetas") or [],
         }
 
         if insertar_transaccion(registro):

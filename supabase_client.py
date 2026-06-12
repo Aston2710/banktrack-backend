@@ -66,7 +66,7 @@ def enriquecer_transaccion(referencia: str, datos_nuevos: dict) -> bool:
     candidatos = [
         "concepto",
         "fecha",
-        "telefono_destino",
+        "contacto_destino",
         "banco_destino",
         "comercio",
         "tarjeta_ultimos",

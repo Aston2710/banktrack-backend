@@ -8,22 +8,25 @@ def calcular_comision_pagomovil(monto_bs: float) -> float:
     return max(comision, 2.0)
 
 
-def resolver_comision(transaccion: dict) -> float:
+def resolver_comision(transaccion: dict) -> dict:
     """
-    - transferencia → usa la comisión declarada por el banco
-    - enviado       → calcula 0.3% con mínimo 2 Bs
-    - entrada       → sin comisión
+    Retorna {"monto": float, "fuente": str|None}
+    - transferencia → monto declarado por el banco, fuente "declarada"
+    - enviado       → calcula 0.3% con mínimo 2 Bs, fuente "calculada"
+    - servicio      → 0.0, fuente "exonerada" (regulación BCV)
+    - rechazado/entradas/otros → 0.0 o tarifa plana, fuente None
     """
     subtipo = transaccion.get("subtipo")
     monto   = transaccion.get("monto_bs") or 0.0
 
     if subtipo == "transferencia":
-        return transaccion.get("comision_declarada_bs") or 0.0
+        monto_com = transaccion.get("comision_declarada_bs") or 0.0
+        return {"monto": monto_com, "fuente": "declarada"}
     elif subtipo == "enviado":
-        return calcular_comision_pagomovil(monto)
+        return {"monto": calcular_comision_pagomovil(monto), "fuente": "calculada"}
     elif subtipo == "rechazado":
-        return 2.0
+        return {"monto": 2.0, "fuente": None}
     elif subtipo == "servicio":
-        return 0.0          # exonerado por regulación BCV
+        return {"monto": 0.0, "fuente": "exonerada"}
     else:
-        return 0.0
+        return {"monto": 0.0, "fuente": None}

@@ -74,7 +74,7 @@ def parsear_servicio(cuerpo: str) -> dict:
         "tipo":             "salida",
         "subtipo":          TIPO_SERVICIO,
         "monto_bs":         None,
-        "numero_servicio":  None,
+        "contacto_destino": None,
         "fecha":            None,
         "referencia":       None,
     }
@@ -94,7 +94,7 @@ def parsear_servicio(cuerpo: str) -> dict:
     # Número de servicio (teléfono, cuenta, etc.)
     raw = _buscar(r'servicio Nro\.\s*([\d]+)', cuerpo)
     if raw:
-        resultado["numero_servicio"] = raw
+        resultado["contacto_destino"] = raw
 
     # Fecha y hora: "11/06/2026 08:24 AM"
     m = re.search(
@@ -146,12 +146,12 @@ def parsear_recibido(cuerpo: str) -> dict:
 
 def parsear_enviado(cuerpo: str) -> dict:
     resultado = {
-        "tipo":            "salida",
-        "subtipo":         TIPO_ENVIADO,
-        "monto_bs":        None,
-        "celular_destino": None,
-        "fecha":           None,
-        "referencia":      None,
+        "tipo":             "salida",
+        "subtipo":          TIPO_ENVIADO,
+        "monto_bs":         None,
+        "contacto_destino": None,
+        "fecha":            None,
+        "referencia":       None,
     }
 
     raw = _buscar(r'pago por\s+Bs\.\s*([\d\s.,]+?)\s*a través', cuerpo)
@@ -160,7 +160,7 @@ def parsear_enviado(cuerpo: str) -> dict:
 
     raw = _buscar(r'número de celular\s+(\*[\d*\-]+)', cuerpo)
     if raw:
-        resultado["celular_destino"] = raw
+        resultado["contacto_destino"] = raw
 
     m = re.search(
         r'el día\s+(\d{2}/\d{2}/\d{4})\s+a las\s+([\d:]+)',
@@ -181,8 +181,8 @@ def parsear_transferencia(cuerpo: str) -> dict:
         "tipo":                  "salida",
         "subtipo":               TIPO_TRANSFERENCIA,
         "monto_bs":              None,
-        "comision_declarada_bs": None,
-        "telefono_destino":      None,
+        "comision_declarada_bs": None,  # campo interno para resolver_comision, no va a la BD
+        "contacto_destino":      None,
         "banco_destino":         None,
         "beneficiario":          None,
         "concepto":              None,
@@ -200,7 +200,7 @@ def parsear_transferencia(cuerpo: str) -> dict:
 
     raw = _buscar(r'Tel[eé?]+fono Destino[:\s]+(\d+)', cuerpo)
     if raw:
-        resultado["telefono_destino"] = raw
+        resultado["contacto_destino"] = raw
 
     raw = _buscar(r'Banco Destino[:\s]+(.+?)(?:\s+Monto a Acreditar|\n|$)', cuerpo)
     if raw:
@@ -235,7 +235,7 @@ def parsear_pago_inmediato(cuerpo: str) -> dict:
         "monto_bs":         None,
         "referencia":       None,
         "concepto":         None,
-        "telefono_destino": None,
+        "contacto_destino": None,
         "banco_destino":    None,
         "fecha":            None,
     }
@@ -254,7 +254,7 @@ def parsear_pago_inmediato(cuerpo: str) -> dict:
 
     raw = _buscar(r'Tel[eé?]+fono Destino[:\s]+(\d+)', cuerpo)
     if raw:
-        resultado["telefono_destino"] = raw
+        resultado["contacto_destino"] = raw
 
     raw = _buscar(r'Banco Destino[:\s]+(.+?)(?:\s+Monto a Acreditar|\n|$)', cuerpo)
     if raw:

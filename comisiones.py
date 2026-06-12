@@ -21,5 +21,9 @@ def resolver_comision(transaccion: dict) -> float:
         return transaccion.get("comision_declarada_bs") or 0.0
     elif subtipo == "enviado":
         return calcular_comision_pagomovil(monto)
+    elif subtipo == "rechazado":
+        return 2.0
+    elif subtipo == "servicio":
+        return 0.0          # exonerado por regulación BCV
     else:
         return 0.0

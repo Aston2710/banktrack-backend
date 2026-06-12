@@ -95,6 +95,18 @@ def test_parser():
                 "VENEZOLANO DE CREDITO, S.A. Banco Universal"
             ),
         },
+        {
+            "nombre": "SERVICIO",
+            "asunto": "Pago de Servicio",
+            "cuerpo": (
+                "Estimado cliente, le notificamos que hemos registrado un pago de servicio "
+                "Nro. 04125067692 a traves del Venezolano de Credito por Venezolano Online, "
+                "por un monto de Bs. 600, en fecha y hora 11/06/2026 08:24 AM\n"
+                "Si Usted no reconoce este pago de servicio por Venezolano Online, "
+                "por favor comuniquese con el 0501-mibanco(6422626) o 0212-203.5300.\n"
+                "Gracias por utilizar el Venezolano Online."
+            ),
+        },
     ]
 
     campos_requeridos = {
@@ -104,6 +116,7 @@ def test_parser():
         "RECHAZADO":      ["monto_bs", "fecha"],
         "PAGO INMEDIATO": ["monto_bs", "fecha", "referencia", "concepto"],
         "TARJETA":        ["monto_bs", "fecha", "comercio", "tarjeta_ultimos"],
+        "SERVICIO": ["monto_bs", "fecha", "numero_servicio"],
     }
 
     errores = 0

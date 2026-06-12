@@ -81,6 +81,7 @@ def procesar_correos():
             "celular_origen":        datos.get("celular_origen"),
             "celular_destino":       datos.get("celular_destino"),
             "telefono_destino":      datos.get("telefono_destino"),
+            "numero_servicio":       datos.get("numero_servicio"),
             "banco_destino":         datos.get("banco_destino"),
             "beneficiario":          datos.get("beneficiario"),
             "comercio":              datos.get("comercio"),

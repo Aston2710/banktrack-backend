@@ -8,7 +8,7 @@ TIPO_TRANSFERENCIA  = "transferencia"
 TIPO_PAGO_INMEDIATO = "pago_inmediato"
 TIPO_TARJETA        = "tarjeta"
 TIPO_DESCONOCIDO    = "desconocido"
-
+TIPO_SERVICIO = "servicio"
 
 def identificar_tipo(asunto: str, cuerpo: str) -> str:
     asunto_lower = asunto.lower()
@@ -23,6 +23,8 @@ def identificar_tipo(asunto: str, cuerpo: str) -> str:
         return TIPO_PAGO_INMEDIATO
     if "transferencia a tercero" in asunto_lower:
         return TIPO_TRANSFERENCIA
+    if "pago de servicio" in asunto_lower:          # ← NUEVO
+        return TIPO_SERVICIO
     if "pago móvil bvc" in asunto_lower or "pago movil bvc" in asunto_lower:
         if "ha recibido un pago" in cuerpo_lower:
             return TIPO_RECIBIDO
@@ -61,6 +63,48 @@ def _parsear_fecha(fecha_str: str, hora_str: str) -> Optional[datetime]:
         except ValueError:
             continue
     return None
+
+def parsear_servicio(cuerpo: str) -> dict:
+    """
+    Pago de servicio (recarga telefónica, luz, etc.)
+    Sin comisión por regulación BCV.
+    Monto puede venir con o sin decimales: "Bs. 600" o "Bs. 600,00"
+    """
+    resultado = {
+        "tipo":             "salida",
+        "subtipo":          TIPO_SERVICIO,
+        "monto_bs":         None,
+        "numero_servicio":  None,
+        "fecha":            None,
+        "referencia":       None,
+    }
+
+    # Monto — maneja "Bs. 600" y "Bs. 600,00"
+    raw = _buscar(r'monto de Bs\.\s*([\d.,]+)', cuerpo)
+    if raw:
+        # Si no tiene coma, es entero — agregamos .00
+        if ',' not in raw:
+            try:
+                resultado["monto_bs"] = float(raw.replace('.', '').strip())
+            except ValueError:
+                pass
+        else:
+            resultado["monto_bs"] = _limpiar_monto(raw)
+
+    # Número de servicio (teléfono, cuenta, etc.)
+    raw = _buscar(r'servicio Nro\.\s*([\d]+)', cuerpo)
+    if raw:
+        resultado["numero_servicio"] = raw
+
+    # Fecha y hora: "11/06/2026 08:24 AM"
+    m = re.search(
+        r'fecha y hora\s+(\d{2}/\d{2}/\d{4})\s+([\d:]+\s*(?:[AP]M)?)',
+        cuerpo, re.IGNORECASE
+    )
+    if m:
+        resultado["fecha"] = _parsear_fecha(m.group(1), m.group(2).strip())
+
+    return resultado
 
 
 def _buscar(patron: str, texto: str) -> Optional[str]:
@@ -282,6 +326,8 @@ def parsear_correo(asunto: str, cuerpo: str) -> dict:
         return parsear_tarjeta(cuerpo)
     elif tipo == TIPO_PAGO_INMEDIATO:
         return parsear_pago_inmediato(cuerpo)
+    elif tipo == TIPO_SERVICIO:
+        return parsear_servicio(cuerpo)
     elif tipo == TIPO_RECIBIDO:
         return parsear_recibido(cuerpo)
     elif tipo == TIPO_ENVIADO:

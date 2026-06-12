@@ -1,14 +1,19 @@
 import threading
 import uvicorn
-from main import main as iniciar_worker
+import os
+
+def iniciar_worker():
+    from main import main
+    main()
 
 def iniciar_api():
-    uvicorn.run("api:app", host="0.0.0.0", port=int(__import__('os').getenv("PORT", 8000)))
+    uvicorn.run("api:app", host="0.0.0.0", port=int(os.getenv("PORT", 8000)))
 
 if __name__ == "__main__":
-    # Arrancar la API en un hilo separado
-    hilo_api = threading.Thread(target=iniciar_api, daemon=True)
-    hilo_api.start()
+    # Worker en hilo secundario
+    hilo_worker = threading.Thread(target=iniciar_worker, daemon=True)
+    hilo_worker.start()
 
-    # Arrancar el worker en el hilo principal
-    iniciar_worker()
+    # API en el hilo principal — Railway necesita que el proceso web
+    # esté en el hilo principal para detectar que está escuchando
+    iniciar_api()

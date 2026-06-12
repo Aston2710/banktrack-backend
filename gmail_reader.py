@@ -11,19 +11,18 @@ SCOPES = ["https://www.googleapis.com/auth/gmail.modify"]
 
 
 def _autenticar() -> object:
-    # Si las credenciales vienen como variable de entorno, escribirlas al disco
-    creds_json = os.getenv("GMAIL_CREDENTIALS_JSON")
-    token_json  = os.getenv("GMAIL_TOKEN_JSON")
+    creds_b64 = os.getenv("GMAIL_CREDENTIALS_JSON")
+    token_b64  = os.getenv("GMAIL_TOKEN_JSON")
 
-    if creds_json and not os.path.exists(GMAIL_CREDENTIALS_PATH):
+    if creds_b64 and not os.path.exists(GMAIL_CREDENTIALS_PATH):
         os.makedirs(os.path.dirname(GMAIL_CREDENTIALS_PATH), exist_ok=True)
-        with open(GMAIL_CREDENTIALS_PATH, "w") as f:
-            json.dump(json.loads(creds_json), f)
+        with open(GMAIL_CREDENTIALS_PATH, "wb") as f:
+            f.write(base64.b64decode(creds_b64))
 
-    if token_json and not os.path.exists(GMAIL_TOKEN_PATH):
+    if token_b64 and not os.path.exists(GMAIL_TOKEN_PATH):
         os.makedirs(os.path.dirname(GMAIL_TOKEN_PATH), exist_ok=True)
-        with open(GMAIL_TOKEN_PATH, "w") as f:
-            json.dump(json.loads(token_json), f)
+        with open(GMAIL_TOKEN_PATH, "wb") as f:
+            f.write(base64.b64decode(token_b64))
 
     creds = None
     if os.path.exists(GMAIL_TOKEN_PATH):

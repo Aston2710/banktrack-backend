@@ -1,4 +1,5 @@
 import os
+import json
 import base64
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -10,26 +11,34 @@ SCOPES = ["https://www.googleapis.com/auth/gmail.modify"]
 
 
 def _autenticar() -> object:
-    """
-    Primera vez: abre navegador para autenticar.
-    Siguientes veces: usa token.json guardado.
-    """
-    creds = None
+    # Si las credenciales vienen como variable de entorno, escribirlas al disco
+    creds_json = os.getenv("GMAIL_CREDENTIALS_JSON")
+    token_json  = os.getenv("GMAIL_TOKEN_JSON")
 
+    if creds_json and not os.path.exists(GMAIL_CREDENTIALS_PATH):
+        os.makedirs(os.path.dirname(GMAIL_CREDENTIALS_PATH), exist_ok=True)
+        with open(GMAIL_CREDENTIALS_PATH, "w") as f:
+            json.dump(json.loads(creds_json), f)
+
+    if token_json and not os.path.exists(GMAIL_TOKEN_PATH):
+        os.makedirs(os.path.dirname(GMAIL_TOKEN_PATH), exist_ok=True)
+        with open(GMAIL_TOKEN_PATH, "w") as f:
+            json.dump(json.loads(token_json), f)
+
+    creds = None
     if os.path.exists(GMAIL_TOKEN_PATH):
         creds = Credentials.from_authorized_user_file(GMAIL_TOKEN_PATH, SCOPES)
 
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
+            with open(GMAIL_TOKEN_PATH, "w") as token:
+                token.write(creds.to_json())
         else:
-            flow = InstalledAppFlow.from_client_secrets_file(
-                GMAIL_CREDENTIALS_PATH, SCOPES
+            raise Exception(
+                "Token inválido o expirado. Regenera el token localmente "
+                "y actualiza GMAIL_TOKEN_JSON en Railway."
             )
-            creds = flow.run_local_server(port=0)
-
-        with open(GMAIL_TOKEN_PATH, "w") as token:
-            token.write(creds.to_json())
 
     return build("gmail", "v1", credentials=creds)
 

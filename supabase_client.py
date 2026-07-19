@@ -1,3 +1,4 @@
+import re
 from supabase import create_client, Client
 from config import SUPABASE_URL, SUPABASE_KEY
 from datetime import datetime
@@ -14,6 +15,21 @@ _COLUMNAS_OPCIONALES = ["tasa_euro", "monto_eur"]
 def _es_error_columna_faltante(mensaje: str) -> bool:
     m = mensaje.lower()
     return "pgrst204" in m or ("column" in m and ("does not exist" in m or "could not find" in m))
+
+
+def _solo_digitos(valor: Optional[str]) -> str:
+    return re.sub(r"\D", "", valor or "")
+
+
+def _es_enmascarado(valor: Optional[str]) -> bool:
+    """Un contacto enmascarado trae asteriscos, ej. '****-*****35'."""
+    return bool(valor) and "*" in valor
+
+
+def _mismos_ultimos_2(a: Optional[str], b: Optional[str]) -> bool:
+    """True si ambos terminan en los mismos 2 dígitos (misma cuenta/celular)."""
+    da, db = _solo_digitos(a), _solo_digitos(b)
+    return len(da) >= 2 and len(db) >= 2 and da[-2:] == db[-2:]
 
 
 def insertar_transaccion(datos: dict) -> bool:
@@ -101,6 +117,19 @@ def enriquecer_transaccion(referencia: str, datos_nuevos: dict) -> bool:
         # Solo actualizar si el nuevo tiene valor y el existente está vacío
         if valor_nuevo and not valor_existente:
             campos_a_actualizar[campo] = valor_nuevo
+
+    # contacto_destino: si el registro existente tiene el número ENMASCARADO
+    # (ej. '****-*****35', del correo "enviado") y el correo nuevo trae el
+    # número COMPLETO (ej. '04129823335', del "pago inmediato"), lo mejoramos
+    # al completo — pero solo si coinciden los últimos 2 dígitos, confirmando
+    # que es la misma cuenta/celular.
+    nuevo_contacto     = datos_nuevos.get("contacto_destino")
+    contacto_existente = existente.get("contacto_destino")
+    if (nuevo_contacto
+            and _es_enmascarado(contacto_existente)
+            and not _es_enmascarado(nuevo_contacto)
+            and _mismos_ultimos_2(nuevo_contacto, contacto_existente)):
+        campos_a_actualizar["contacto_destino"] = nuevo_contacto
 
     if not campos_a_actualizar:
         print(f"[supabase] ⏭️  Duplicado sin datos nuevos: ref {referencia} — ignorado")

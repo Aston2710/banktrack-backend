@@ -229,8 +229,13 @@ def parsear_transferencia(cuerpo: str) -> dict:
 
 
 def parsear_pago_inmediato(cuerpo: str) -> dict:
+    # Un Pago Inmediato es un pago móvil real que sale de la cuenta ("Monto a
+    # Debitar") → es una transacción de tipo 'salida', no un enriquecimiento.
+    # El enriquecimiento (complementar una transacción existente con datos de
+    # otro correo del mismo pago) lo resuelve main.py cuando la referencia ya
+    # existe: en ese caso hace UPDATE, nunca inserta una fila nueva.
     resultado = {
-        "tipo":             "enriquecimiento",
+        "tipo":             "salida",
         "subtipo":          TIPO_PAGO_INMEDIATO,
         "monto_bs":         None,
         "referencia":       None,

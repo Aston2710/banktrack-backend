@@ -12,7 +12,8 @@ def resolver_comision(transaccion: dict) -> dict:
     """
     Retorna {"monto": float, "fuente": str|None}
     - transferencia → monto declarado por el banco, fuente "declarada"
-    - enviado       → calcula 0.3% con mínimo 2 Bs, fuente "calculada"
+    - enviado / pago_inmediato → calcula 0.3% con mínimo 2 Bs, fuente "calculada"
+      (ambos son pago móvil sin comisión declarada en el correo)
     - servicio      → 0.0, fuente "exonerada" (regulación BCV)
     - rechazado/entradas/otros → 0.0 o tarifa plana, fuente None
     """
@@ -22,7 +23,7 @@ def resolver_comision(transaccion: dict) -> dict:
     if subtipo == "transferencia":
         monto_com = transaccion.get("comision_declarada_bs") or 0.0
         return {"monto": monto_com, "fuente": "declarada"}
-    elif subtipo == "enviado":
+    elif subtipo in ("enviado", "pago_inmediato"):
         return {"monto": calcular_comision_pagomovil(monto), "fuente": "calculada"}
     elif subtipo == "rechazado":
         return {"monto": 2.0, "fuente": None}

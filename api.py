@@ -87,6 +87,8 @@ def obtener_resumen(mes: str, _=Depends(verificar_token)):
     comisiones = sum(t.get("comision_bs") or 0 for t in transacciones)
     tasas      = [t["tasa_dolar"] for t in transacciones if t.get("tasa_dolar")]
     tasa_prom  = round(sum(tasas) / len(tasas), 4) if tasas else None
+    tasas_eur  = [t["tasa_euro"] for t in transacciones if t.get("tasa_euro")]
+    tasa_prom_eur = round(sum(tasas_eur) / len(tasas_eur), 4) if tasas_eur else None
 
     return {
         "mes":              mes,
@@ -98,7 +100,11 @@ def obtener_resumen(mes: str, _=Depends(verificar_token)):
         "entradas_usd":     round(entradas / tasa_prom, 2) if tasa_prom else None,
         "salidas_usd":      round(salidas / tasa_prom, 2) if tasa_prom else None,
         "balance_usd":      round((entradas - salidas) / tasa_prom, 2) if tasa_prom else None,
+        "entradas_eur":     round(entradas / tasa_prom_eur, 2) if tasa_prom_eur else None,
+        "salidas_eur":      round(salidas / tasa_prom_eur, 2) if tasa_prom_eur else None,
+        "balance_eur":      round((entradas - salidas) / tasa_prom_eur, 2) if tasa_prom_eur else None,
         "tasa_promedio":    tasa_prom,
+        "tasa_promedio_eur": tasa_prom_eur,
         "total_movimientos": len(transacciones),
     }
 

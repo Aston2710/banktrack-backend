@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Project Does
 
-BankTrack Backend is a scheduled Python daemon that monitors a Gmail inbox for Venezuelan bank email notifications (Banco Venezolano de Crédito), parses them with regex, and stores structured transaction records in Supabase (PostgreSQL). It is **not** an HTTP API — it runs as a background worker on a configurable interval.
+BankTrack Backend is a scheduled Python daemon that monitors a Gmail inbox for Venezuelan bank email notifications (Banco Venezolano de Crédito), parses them with regex, and stores structured transaction records in Supabase (PostgreSQL). It also exposes a small FastAPI HTTP API (`api.py`) consumed by a mobile app. In production (`start.py` on Railway) the API runs on the main thread and the Gmail worker on a daemon thread.
+
+Detailed docs live in `md/` (architecture, modules, database, API, deployment).
 
 ## Setup & Running
 
@@ -20,7 +22,7 @@ pip install -r requirements.txt
 python main.py
 ```
 
-Required `.env` variables: `SUPABASE_URL`, `SUPABASE_KEY`, `GMAIL_CREDENTIALS_PATH`, `GMAIL_TOKEN_PATH`, `GMAIL_LABEL`, `INTERVALO_MINUTOS`, `DOLAR_API_URL`.
+Required `.env` variables: `SUPABASE_URL`, `SUPABASE_KEY`, `GMAIL_CREDENTIALS_PATH`, `GMAIL_TOKEN_PATH`, `GMAIL_LABEL`, `INTERVALO_MINUTOS`, `DOLAR_API_URL`. Optional: `EURO_API_URL` (EUR conversion), `API_KEY` (HTTP API auth).
 
 Gmail requires an OAuth credentials file at the path set in `GMAIL_CREDENTIALS_PATH`. The first run opens a browser for approval; subsequent runs use the cached token.
 
@@ -42,7 +44,7 @@ Initialize config
   → procesar_correos() every INTERVALO_MINUTOS minutes
       → gmail_reader: fetch unread emails from label
       → parser: identify type + extract fields via regex
-      → dolar_api: fetch BCV exchange rate
+      → dolar_api: fetch BCV USD and EUR exchange rates
       → comisiones: compute commission based on type
       → supabase_client: insert or enrich existing record
       → gmail_reader: mark email as read
@@ -55,11 +57,13 @@ Initialize config
 |---|---|
 | `config.py` | Loads and validates `.env`; exports all config constants |
 | `gmail_reader.py` | OAuth2 auth, fetches unread threads from Gmail label, decodes base64 bodies |
-| `parser.py` | ~1400 lines of regex parsing; routes to one of 7 type-specific functions |
+| `parser.py` | Regex parsing; routes to one of 7 type-specific functions |
+| `api.py` | FastAPI HTTP API (bearer auth via `API_KEY`) for the mobile app |
+| `start.py` | Production entrypoint: API on main thread + worker daemon thread |
 | `supabase_client.py` | All DB operations: insert, duplicate check, enrichment, monthly summaries |
 | `comisiones.py` | Commission rules by transaction type |
 | `alertas.py` | Monthly spending limit alerts at configurable % threshold |
-| `dolar_api.py` | Hits `ve.dolarapi.com` for BCV USD/Bs exchange rate |
+| `dolar_api.py` | Hits `ve.dolarapi.com` for BCV USD/Bs and EUR/Bs exchange rates |
 
 ### Transaction types
 
@@ -73,7 +77,7 @@ When a transaction with the same `referencia` already exists, `supabase_client.p
 
 ### Database tables (Supabase)
 
-- **transacciones** — one row per parsed transaction; dual-currency fields (`monto_bs`, `monto_usd`, `tasa_dolar`)
+- **transacciones** — one row per parsed transaction; multi-currency fields (`monto_bs`, `monto_usd`, `tasa_dolar`, `monto_eur`, `tasa_euro`)
 - **configuracion** — runtime settings (`limite_mensual_bs`, `alerta_porcentaje`)
 - **cierres_mensuales** — monthly aggregate summaries
 

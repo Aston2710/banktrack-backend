@@ -6,6 +6,16 @@ from typing import Optional
 _cliente: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 
+# Columnas nuevas que pueden no existir aún en la BD.
+# Si Supabase las rechaza, se reintenta sin ellas para no perder la transacción.
+_COLUMNAS_OPCIONALES = ["tasa_euro", "monto_eur"]
+
+
+def _es_error_columna_faltante(mensaje: str) -> bool:
+    m = mensaje.lower()
+    return "pgrst204" in m or ("column" in m and ("does not exist" in m or "could not find" in m))
+
+
 def insertar_transaccion(datos: dict) -> bool:
     try:
         _cliente.table("transacciones").insert(datos).execute()
@@ -18,6 +28,17 @@ def insertar_transaccion(datos: dict) -> bool:
         if "duplicate" in mensaje.lower() or "unique" in mensaje.lower():
             print(f"[supabase] ⚠️  Ya existe email_id: {datos.get('email_id')} — ignorado")
             return False
+        if _es_error_columna_faltante(mensaje):
+            reducido = {k: v for k, v in datos.items() if k not in _COLUMNAS_OPCIONALES}
+            print("[supabase] ⚠️  Columnas EUR no existen en la BD — reintentando sin ellas. "
+                  "Ejecuta el SQL de md/base-de-datos.md para habilitarlas.")
+            try:
+                _cliente.table("transacciones").insert(reducido).execute()
+                print(f"[supabase] ✅ Insertada (sin EUR): ref: {datos.get('referencia')}")
+                return True
+            except Exception as e2:
+                print(f"[supabase] ❌ Error insertando (reintento): {e2}")
+                return False
         print(f"[supabase] ❌ Error insertando: {e}")
         return False
 
@@ -132,9 +153,13 @@ def guardar_cierre_mensual(mes: str) -> bool:
         salidas_bs   = sum(t["monto_bs"] for t in transacciones if t["tipo"] == "salida")
         entradas_usd = sum(t.get("monto_usd") or 0 for t in transacciones if t["tipo"] == "entrada")
         salidas_usd  = sum(t.get("monto_usd") or 0 for t in transacciones if t["tipo"] == "salida")
+        entradas_eur = sum(t.get("monto_eur") or 0 for t in transacciones if t["tipo"] == "entrada")
+        salidas_eur  = sum(t.get("monto_eur") or 0 for t in transacciones if t["tipo"] == "salida")
         comisiones   = sum(t.get("comision_bs") or 0 for t in transacciones)
         tasas        = [t["tasa_dolar"] for t in transacciones if t.get("tasa_dolar")]
         tasa_prom    = round(sum(tasas) / len(tasas), 4) if tasas else None
+        tasas_eur    = [t["tasa_euro"] for t in transacciones if t.get("tasa_euro")]
+        tasa_prom_eur = round(sum(tasas_eur) / len(tasas_eur), 4) if tasas_eur else None
         pct_comision = round((comisiones / salidas_bs * 100), 4) if salidas_bs > 0 else 0
 
         cierre = {
@@ -143,13 +168,25 @@ def guardar_cierre_mensual(mes: str) -> bool:
             "total_salidas_bs":      round(salidas_bs, 2),
             "total_entradas_usd":    round(entradas_usd, 4),
             "total_salidas_usd":     round(salidas_usd, 4),
+            "total_entradas_eur":    round(entradas_eur, 4),
+            "total_salidas_eur":     round(salidas_eur, 4),
             "total_comisiones_bs":   round(comisiones, 2),
             "porcentaje_comisiones": pct_comision,
             "tasa_promedio_mes":     tasa_prom,
+            "tasa_promedio_eur_mes": tasa_prom_eur,
             "cerrado_en":            datetime.utcnow().isoformat(),
         }
 
-        _cliente.table("cierres_mensuales").upsert(cierre).execute()
+        try:
+            _cliente.table("cierres_mensuales").upsert(cierre).execute()
+        except Exception as e:
+            if not _es_error_columna_faltante(str(e)):
+                raise
+            reducido = {k: v for k, v in cierre.items()
+                        if k not in ("total_entradas_eur", "total_salidas_eur", "tasa_promedio_eur_mes")}
+            print("[supabase] ⚠️  Columnas EUR no existen en cierres_mensuales — guardando sin ellas. "
+                  "Ejecuta el SQL de md/base-de-datos.md.")
+            _cliente.table("cierres_mensuales").upsert(reducido).execute()
         print(f"[supabase] Cierre mensual guardado: {mes}")
         return True
     except Exception as e:

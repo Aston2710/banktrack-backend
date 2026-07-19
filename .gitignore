@@ -5,3 +5,9 @@ __pycache__/
 *.pyc
 token.json
 .md/
+md/
+
+.claude/
+.agents/
+.mcp.json
+skills-lock.json

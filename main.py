@@ -6,7 +6,7 @@ from config import validar_config, INTERVALO_MINUTOS
 from gmail_reader import obtener_correos_no_leidos, marcar_como_leido
 from parser import parsear_correo
 from comisiones import resolver_comision
-from dolar_api import obtener_tasa_bcv
+from dolar_api import obtener_tasa_bcv, obtener_tasa_euro
 from supabase_client import (
     insertar_transaccion,
     existe_referencia,
@@ -23,6 +23,12 @@ def procesar_correos():
         print(f"[main] Tasa BCV: Bs. {tasa}")
     else:
         print("[main] Sin tasa disponible — se guardará sin conversión USD")
+
+    tasa_euro = obtener_tasa_euro()
+    if tasa_euro:
+        print(f"[main] Tasa EUR: Bs. {tasa_euro}")
+    else:
+        print("[main] Sin tasa euro disponible — se guardará sin conversión EUR")
 
     correos = obtener_correos_no_leidos()
     if not correos:
@@ -64,6 +70,10 @@ def procesar_correos():
         if tasa and monto_real and monto_real > 0:
             monto_usd = round(monto_real / tasa, 4)
 
+        monto_eur = None
+        if tasa_euro and monto_real and monto_real > 0:
+            monto_eur = round(monto_real / tasa_euro, 4)
+
         mes_corte = (datos["fecha"].strftime("%Y-%m")
                      if datos.get("fecha")
                      else datetime.now().strftime("%Y-%m"))
@@ -80,6 +90,8 @@ def procesar_correos():
             "monto_bs":         monto_real,
             "tasa_dolar":       tasa,
             "monto_usd":        monto_usd,
+            "tasa_euro":        tasa_euro,
+            "monto_eur":        monto_eur,
             "referencia":       referencia,
             "celular_origen":   datos.get("celular_origen"),
             "contacto_destino": datos.get("contacto_destino"),

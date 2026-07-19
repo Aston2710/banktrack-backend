@@ -9,6 +9,7 @@ GMAIL_CREDENTIALS_PATH    = os.getenv("GMAIL_CREDENTIALS_PATH")
 GMAIL_TOKEN_PATH          = os.getenv("GMAIL_TOKEN_PATH")
 GMAIL_LABEL               = os.getenv("GMAIL_LABEL", "BVC")
 DOLAR_API_URL             = os.getenv("DOLAR_API_URL")
+EURO_API_URL              = os.getenv("EURO_API_URL")
 INTERVALO_MINUTOS         = int(os.getenv("INTERVALO_MINUTOS", "5"))
 
 # Validación al arrancar

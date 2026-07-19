@@ -220,7 +220,7 @@ def test_supabase():
         insertar_transaccion,
         obtener_transacciones_mes,
     )
-    from datetime import datetime
+    from datetime import datetime, timezone
 
     errores = 0
 
@@ -237,7 +237,7 @@ def test_supabase():
     print("\n  4b. Insertar transacción de prueba...")
     registro_prueba = {
         "email_id":   "test-email-id-000",
-        "fecha":      datetime.now(datetime.UTC).isoformat(),
+        "fecha":      datetime.now(timezone.utc).isoformat(),
         "tipo":       "entrada",
         "subtipo":    "recibido",
         "monto_bs":   1.00,

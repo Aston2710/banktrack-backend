@@ -11,3 +11,5 @@ md/
 .agents/
 .mcp.json
 skills-lock.json
+
+ingesta/

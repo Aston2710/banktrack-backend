@@ -66,13 +66,28 @@ def procesar_correos():
         if subtipo == "rechazado":
             monto_real = 0.0
 
+        # La tasa BCV se consulta AHORA, no en la fecha real del pago. Si el
+        # correo es de un día distinto a hoy (ej. se solicitó manualmente un
+        # correo viejo, o el daemon procesó un backlog acumulado), la tasa de
+        # hoy NO corresponde a ese pago. En ese caso se guarda vacía en vez
+        # de un valor incorrecto — no hay forma de recuperar la tasa histórica.
+        fecha_pago = datos.get("fecha")
+        es_tasa_del_dia = fecha_pago is not None and fecha_pago.date() == datetime.now().date()
+
+        tasa_aplicable      = tasa      if es_tasa_del_dia else None
+        tasa_euro_aplicable = tasa_euro if es_tasa_del_dia else None
+
+        if fecha_pago is not None and not es_tasa_del_dia:
+            print(f"[main] ⚠️  Correo de fecha pasada ({fecha_pago.date()}) — "
+                  f"se guarda sin tasa (no hay tasa histórica disponible)")
+
         monto_usd = None
-        if tasa and monto_real and monto_real > 0:
-            monto_usd = round(monto_real / tasa, 4)
+        if tasa_aplicable and monto_real and monto_real > 0:
+            monto_usd = round(monto_real / tasa_aplicable, 4)
 
         monto_eur = None
-        if tasa_euro and monto_real and monto_real > 0:
-            monto_eur = round(monto_real / tasa_euro, 4)
+        if tasa_euro_aplicable and monto_real and monto_real > 0:
+            monto_eur = round(monto_real / tasa_euro_aplicable, 4)
 
         mes_corte = (datos["fecha"].strftime("%Y-%m")
                      if datos.get("fecha")
@@ -88,9 +103,9 @@ def procesar_correos():
             "tipo":             datos["tipo"],
             "subtipo":          subtipo,
             "monto_bs":         monto_real,
-            "tasa_dolar":       tasa,
+            "tasa_dolar":       tasa_aplicable,
             "monto_usd":        monto_usd,
-            "tasa_euro":        tasa_euro,
+            "tasa_euro":        tasa_euro_aplicable,
             "monto_eur":        monto_eur,
             "referencia":       referencia,
             "celular_origen":   datos.get("celular_origen"),

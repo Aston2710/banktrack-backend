@@ -51,16 +51,6 @@ def procesar_correos():
             ignorados += 1
             continue
 
-        # ── Verificar duplicado por referencia ────────────────────────────
-        if referencia and existe_referencia(referencia):
-            enriquecido = enriquecer_transaccion(referencia, datos)
-            if enriquecido:
-                enriquecidos += 1
-            else:
-                ignorados += 1
-            marcar_como_leido(correo["id"])
-            continue
-
         # ── Calcular monto real ───────────────────────────────────────────
         monto_real = datos.get("monto_bs")
         if subtipo == "rechazado":
@@ -120,6 +110,18 @@ def procesar_correos():
             "concepto":         datos.get("concepto"),
             "etiquetas":        datos.get("etiquetas") or [],
         }
+
+        # ── Duplicado por referencia → enriquecer ─────────────────────────
+        # Se usa el registro YA enriquecido con tasa/USD/EUR: si el registro
+        # existente quedó sin conversión (p. ej. la tasa no estaba disponible
+        # al insertarlo) y este correo es de hoy, ahora sí se rellena.
+        if referencia and existe_referencia(referencia):
+            if enriquecer_transaccion(referencia, registro):
+                enriquecidos += 1
+            else:
+                ignorados += 1
+            marcar_como_leido(correo["id"])
+            continue
 
         if insertar_transaccion(registro):
             insertados += 1

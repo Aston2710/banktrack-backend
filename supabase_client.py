@@ -108,6 +108,18 @@ def enriquecer_transaccion(referencia: str, datos_nuevos: dict) -> bool:
         "comercio",
         "tarjeta_ultimos",
         "etiquetas",
+        "celular_origen",
+        "beneficiario",
+        # Monto y conversiones. monto_usd / monto_eur / tasa_dolar / tasa_euro
+        # llegan con valor SOLO cuando el correo es de hoy (main.py calcula la
+        # tasa del día únicamente en ese caso); en otra fecha llegan None y se
+        # saltan por el `if valor_nuevo` de abajo. Así el rellenado de la
+        # conversión ocurre solo a la fecha de hoy.
+        "monto_bs",
+        "tasa_dolar",
+        "monto_usd",
+        "tasa_euro",
+        "monto_eur",
     ]
 
     for campo in candidatos:
@@ -145,6 +157,25 @@ def enriquecer_transaccion(referencia: str, datos_nuevos: dict) -> bool:
         print(f"[supabase] 🔄 Enriquecida ref {referencia}: {campos_str}")
         return True
     except Exception as e:
+        mensaje = str(e)
+        if _es_error_columna_faltante(mensaje):
+            reducido = {k: v for k, v in campos_a_actualizar.items()
+                        if k not in _COLUMNAS_OPCIONALES}
+            if not reducido:
+                print(f"[supabase] ⏭️  Solo había columnas EUR (inexistentes) para enriquecer ref {referencia} — ignorado")
+                return False
+            print("[supabase] ⚠️  Columnas EUR no existen en la BD — enriqueciendo sin ellas. "
+                  "Ejecuta el SQL de md/base-de-datos.md para habilitarlas.")
+            try:
+                _cliente.table("transacciones") \
+                    .update(reducido) \
+                    .eq("referencia", referencia) \
+                    .execute()
+                print(f"[supabase] 🔄 Enriquecida (sin EUR) ref {referencia}: {', '.join(reducido.keys())}")
+                return True
+            except Exception as e2:
+                print(f"[supabase] Error enriqueciendo (reintento): {e2}")
+                return False
         print(f"[supabase] Error enriqueciendo: {e}")
         return False
 

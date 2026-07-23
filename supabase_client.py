@@ -32,12 +32,27 @@ def _mismos_ultimos_2(a: Optional[str], b: Optional[str]) -> bool:
     return len(da) >= 2 and len(db) >= 2 and da[-2:] == db[-2:]
 
 
+def _fmt(valor) -> str:
+    """Valor legible para el log; '—' si está vacío."""
+    return "—" if valor in (None, "") else str(valor)
+
+
+def _resumen(datos: dict) -> str:
+    """Resumen consistente con los valores clave de una transacción."""
+    partes = [
+        f"Bs. {_fmt(datos.get('monto_bs'))}",
+        f"USD {_fmt(datos.get('monto_usd'))}",
+        f"EUR {_fmt(datos.get('monto_eur'))}",
+        f"concepto: {_fmt(datos.get('concepto'))}",
+    ]
+    return " | ".join(partes)
+
+
 def insertar_transaccion(datos: dict) -> bool:
     try:
         _cliente.table("transacciones").insert(datos).execute()
         print(f"[supabase] ✅ Insertada: {datos.get('subtipo')} | "
-              f"ref: {datos.get('referencia')} | "
-              f"Bs. {datos.get('monto_bs')}")
+              f"ref: {datos.get('referencia')} | {_resumen(datos)}")
         return True
     except Exception as e:
         mensaje = str(e)
@@ -50,7 +65,7 @@ def insertar_transaccion(datos: dict) -> bool:
                   "Ejecuta el SQL de md/base-de-datos.md para habilitarlas.")
             try:
                 _cliente.table("transacciones").insert(reducido).execute()
-                print(f"[supabase] ✅ Insertada (sin EUR): ref: {datos.get('referencia')}")
+                print(f"[supabase] ✅ Insertada (sin EUR): ref: {datos.get('referencia')} | {_resumen(reducido)}")
                 return True
             except Exception as e2:
                 print(f"[supabase] ❌ Error insertando (reintento): {e2}")
@@ -144,7 +159,7 @@ def enriquecer_transaccion(referencia: str, datos_nuevos: dict) -> bool:
         campos_a_actualizar["contacto_destino"] = nuevo_contacto
 
     if not campos_a_actualizar:
-        print(f"[supabase] ⏭️  Duplicado sin datos nuevos: ref {referencia} — ignorado")
+        print(f"[supabase] ⏭️  Duplicado sin datos nuevos: ref {referencia} — ignorado | {_resumen(existente)}")
         return False
 
     try:
@@ -153,8 +168,11 @@ def enriquecer_transaccion(referencia: str, datos_nuevos: dict) -> bool:
             .eq("referencia", referencia) \
             .execute()
 
-        campos_str = ", ".join(campos_a_actualizar.keys())
-        print(f"[supabase] 🔄 Enriquecida ref {referencia}: {campos_str}")
+        cambios_str = ", ".join(
+            f"{campo}: {_fmt(existente.get(campo))} → {_fmt(valor)}"
+            for campo, valor in campos_a_actualizar.items()
+        )
+        print(f"[supabase] 🔄 Enriquecida ref {referencia}: {cambios_str}")
         return True
     except Exception as e:
         mensaje = str(e)
@@ -171,7 +189,11 @@ def enriquecer_transaccion(referencia: str, datos_nuevos: dict) -> bool:
                     .update(reducido) \
                     .eq("referencia", referencia) \
                     .execute()
-                print(f"[supabase] 🔄 Enriquecida (sin EUR) ref {referencia}: {', '.join(reducido.keys())}")
+                cambios_str = ", ".join(
+                    f"{campo}: {_fmt(existente.get(campo))} → {_fmt(valor)}"
+                    for campo, valor in reducido.items()
+                )
+                print(f"[supabase] 🔄 Enriquecida (sin EUR) ref {referencia}: {cambios_str}")
                 return True
             except Exception as e2:
                 print(f"[supabase] Error enriqueciendo (reintento): {e2}")

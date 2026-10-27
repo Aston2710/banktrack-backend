@@ -1,0 +1,10 @@
+{
+  "tasks": {
+    "test": "deno test --allow-env --allow-net --allow-read tests/"
+  },
+  "imports": {
+    "@supabase/supabase-js": "npm:@supabase/supabase-js@2",
+    "hono": "npm:hono@4",
+    "hono/": "npm:/hono@4/"
+  }
+}

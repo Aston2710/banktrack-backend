@@ -307,8 +307,9 @@ export function parsearTarjeta(cuerpo: string): DatosParseo {
     resultado.fecha = _parsearFecha(mFecha[1], mFecha[2]);
   }
 
-  // Comercio — entre "en el comercio" y el código VE o aprobación
-  raw = _buscar(String.raw`en el comercio\s+(.+?)\s+(?:VE\b|la cual)`, cuerpo);
+  // Comercio — entre "en el comercio" y "VE la cual" (a veces llega pegado: "VEla cual")
+  raw = _buscar(String.raw`en el comercio\s+(.+?)\s*(?:\bVE\s*)?la cual`, cuerpo) ??
+    _buscar(String.raw`en el comercio\s+(.+?)\s+VE\b`, cuerpo);
   if (raw) resultado.comercio = raw.trim();
 
   // Código de aprobación → guardado como referencia y como etiqueta
@@ -372,7 +373,13 @@ export function parsearCorreo(asunto: string, cuerpo: string): DatosParseo {
     datos.subtipo = "rechazado";
     return datos;
   } else if (tipo === TIPO_TARJETA) {
-    return parsearTarjeta(cuerpo);
+    const datos = parsearTarjeta(cuerpo);
+    // Compra rechazada: el correo dice "la cual fue rechazada" (femenino; el
+    // "fue rechazado" de pago móvil no la atrapa). El dinero no salió.
+    if (cuerpo.toLowerCase().includes("fue rechazada")) {
+      datos.tipo = "rechazado";
+    }
+    return datos;
   } else if (tipo === TIPO_PAGO_INMEDIATO) {
     return parsearPagoInmediato(cuerpo);
   } else if (tipo === TIPO_SERVICIO) {

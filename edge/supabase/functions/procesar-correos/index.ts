@@ -88,7 +88,7 @@ Deno.serve(async (req) => {
 
     // ── Calcular monto real ─────────────────────────────────────────────────
     let montoReal = datos.monto_bs;
-    if (subtipo === "rechazado") {
+    if (subtipo === "rechazado" || datos.tipo === "rechazado") {
       montoReal = 0.0;
     }
 
